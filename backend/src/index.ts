@@ -3,9 +3,12 @@ import cors from 'cors';
 import helmet from 'helmet';
 import dotenv from 'dotenv';
 import rateLimit from 'express-rate-limit';
+import path from 'path';
 import authRoutes from './routes/authRoutes';
 import userRoutes from './routes/userRoutes';
 import dashboardRoutes from './routes/dashboardRoutes';
+import uploadRoutes from './routes/uploadRoutes';
+import exportRoutes from './routes/exportRoutes';
 
 dotenv.config();
 
@@ -39,6 +42,9 @@ app.use(cors({
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
+// Serve uploaded files
+app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
+
 // Apply rate limiting
 app.use('/api/', limiter);
 
@@ -54,6 +60,8 @@ app.use('/api/auth/register', authLimiter);
 app.use('/api/auth', authRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/dashboard', dashboardRoutes);
+app.use('/api/upload', uploadRoutes);
+app.use('/api/export', exportRoutes);
 
 // Health check
 app.get('/health', (req: Request, res: Response) => {

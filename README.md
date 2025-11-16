@@ -18,6 +18,10 @@ Este projeto é um template completo de dashboard administrativo construído com
 - **Totalmente Responsivo**: Design mobile-first
 - **Audit Logs**: Rastreamento completo de ações dos usuários
 - **Refresh Tokens**: Sistema seguro de renovação de autenticação
+- **Upload de Arquivos**: Upload de avatars com validação de tipo e tamanho
+- **Email Service**: Envio de emails transacionais (recuperação de senha, boas-vindas)
+- **Recuperação de Senha**: Fluxo completo de reset de senha com tokens seguros
+- **Exports**: Exportação de dados para PDF e Excel (usuários e audit logs)
 
 ### 🛠️ Stack Tecnológica
 
@@ -29,6 +33,9 @@ Este projeto é um template completo de dashboard administrativo construído com
 - Joi para validação
 - **Rate Limiting** (express-rate-limit)
 - **Audit Logs** para rastreamento
+- **Multer** para upload de arquivos
+- **Nodemailer** para envio de emails
+- **PDFKit** e **ExcelJS** para exports
 - Jest + Supertest para testes
 
 #### Frontend
@@ -83,6 +90,17 @@ CORS_ORIGIN=http://localhost:3000
 
 # Database
 DATABASE_URL=postgresql://admin:admin123@localhost:5432/admin_dashboard?schema=public
+
+# SMTP Configuration (para envio de emails)
+SMTP_HOST=smtp.gmail.com
+SMTP_PORT=587
+SMTP_SECURE=false
+SMTP_USER=your-email@gmail.com
+SMTP_PASS=your-app-password
+EMAIL_FROM_NAME=Admin Dashboard
+
+# Frontend URL (para links em emails)
+FRONTEND_URL=http://localhost:3000
 ```
 
 **Frontend:**
@@ -192,9 +210,38 @@ docker-compose down
 ### Fluxo de Autenticação
 
 1. Faça login na página `/login`
-2. O token JWT será armazenado no localStorage
-3. Todas as requisições subsequentes incluem o token no header
-4. O token expira em 24 horas
+2. O **access token** JWT será armazenado no localStorage (expira em 15 minutos)
+3. O **refresh token** permite renovar o access token (válido por 7 dias)
+4. Todas as requisições subsequentes incluem o access token no header
+5. Quando o access token expira, use o refresh token para obter um novo
+
+### Recuperação de Senha
+
+1. Acesse `/forgot-password` e informe o email
+2. Um email será enviado com link de reset (válido por 1 hora)
+3. Clique no link e defina a nova senha
+4. Todos os refresh tokens serão invalidados por segurança
+
+## 📤 Upload de Arquivos
+
+### Avatar de Usuário
+
+- Acesse as configurações do perfil
+- Faça upload de uma imagem (JPEG, PNG, GIF, WEBP)
+- Tamanho máximo: 5MB
+- A imagem antiga é automaticamente deletada
+
+## 📊 Exports
+
+### Exportar Dados
+
+Usuários administradores podem exportar:
+- **Usuários**: Lista completa em PDF ou Excel
+- **Audit Logs**: Histórico completo de ações em PDF ou Excel
+
+Os exports incluem:
+- PDF: Formatação profissional com headers, paginação e footers
+- Excel: Planilhas com formatação, auto-filtros e cores
 
 ## 📁 Estrutura do Projeto
 
@@ -281,11 +328,13 @@ npm run test:watch
 ### Autenticação
 
 ```
-POST /api/auth/login          # Login (retorna accessToken + refreshToken)
-POST /api/auth/register       # Registro de novo usuário
-POST /api/auth/refresh        # Renovar access token usando refresh token
-POST /api/auth/logout         # Logout (invalida refresh token)
-POST /api/auth/logout-all     # Logout de todos os dispositivos (requer auth)
+POST /api/auth/login            # Login (retorna accessToken + refreshToken)
+POST /api/auth/register         # Registro de novo usuário
+POST /api/auth/refresh          # Renovar access token usando refresh token
+POST /api/auth/logout           # Logout (invalida refresh token)
+POST /api/auth/logout-all       # Logout de todos os dispositivos (requer auth)
+POST /api/auth/forgot-password  # Solicitar reset de senha (envia email)
+POST /api/auth/reset-password   # Resetar senha com token
 ```
 
 **Rate Limiting:** Login e Register limitados a 5 tentativas por 15 minutos por IP.
@@ -307,6 +356,25 @@ DELETE /api/users/:id                              # Deletar usuário (requer ad
 ```
 GET /api/dashboard/stats              # Estatísticas do dashboard
 GET /api/dashboard/charts/:type       # Dados dos gráficos (revenue, users, activity)
+```
+
+### Upload
+
+```
+POST   /api/upload/avatar             # Upload de avatar (requer auth, max 5MB)
+DELETE /api/upload/avatar             # Deletar avatar (requer auth)
+```
+
+**Formatos aceitos:** JPEG, JPG, PNG, GIF, WEBP
+**Tamanho máximo:** 5MB
+
+### Exports
+
+```
+GET /api/export/users/pdf             # Exportar usuários para PDF (requer admin)
+GET /api/export/users/excel           # Exportar usuários para Excel (requer admin)
+GET /api/export/audit-logs/pdf        # Exportar audit logs para PDF (requer admin)
+GET /api/export/audit-logs/excel      # Exportar audit logs para Excel (requer admin)
 ```
 
 ### Health Check
@@ -383,6 +451,13 @@ const { theme, toggleTheme } = useThemeStore();
 | JWT_SECRET | Chave secreta JWT | - |
 | CORS_ORIGIN | Origem CORS permitida | http://localhost:3000 |
 | DATABASE_URL | URL de conexão PostgreSQL | postgresql://admin:admin123@localhost:5432/admin_dashboard |
+| SMTP_HOST | Servidor SMTP | smtp.gmail.com |
+| SMTP_PORT | Porta SMTP | 587 |
+| SMTP_SECURE | SSL/TLS | false |
+| SMTP_USER | Usuário SMTP | - |
+| SMTP_PASS | Senha/App Password SMTP | - |
+| EMAIL_FROM_NAME | Nome do remetente | Admin Dashboard |
+| FRONTEND_URL | URL do frontend | http://localhost:3000 |
 
 #### Frontend (.env)
 
@@ -428,16 +503,20 @@ Este projeto está sob a licença MIT. Veja o arquivo LICENSE para mais detalhes
 
 ## 🎯 Roadmap
 
-- [ ] Adicionar banco de dados (PostgreSQL/MongoDB)
+- [x] Adicionar banco de dados (PostgreSQL + Prisma ORM)
+- [x] Implementar rate limiting
+- [x] Adicionar audit logs
+- [x] Implementar refresh tokens
+- [x] Implementar upload de arquivos (avatars)
+- [x] Implementar exports (PDF, Excel)
+- [x] Sistema de recuperação de senha
+- [x] Email service (transacionais)
 - [ ] Implementar Redis para cache
 - [ ] Adicionar suporte a websockets
-- [ ] Implementar upload de arquivos
 - [ ] Adicionar mais tipos de gráficos
-- [ ] Implementar exports (PDF, Excel)
 - [ ] Adicionar autenticação OAuth
 - [ ] Implementar internacionalização (i18n)
-- [ ] Adicionar logs estruturados
-- [ ] Implementar rate limiting
+- [ ] Adicionar logs estruturados (Winston/Pino)
 
 ## 💡 Recursos Adicionais
 

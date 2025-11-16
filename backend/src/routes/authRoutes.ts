@@ -10,5 +10,7 @@ router.post('/register', validateRequest(schemas.createUser), AuthController.reg
 router.post('/refresh', AuthController.refreshToken);
 router.post('/logout', AuthController.logout);
 router.post('/logout-all', authenticateToken, AuthController.logoutAll);
+router.post('/forgot-password', AuthController.forgotPassword);
+router.post('/reset-password', AuthController.resetPassword);
 
 export default router;
