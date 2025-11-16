@@ -11,19 +11,24 @@ Este projeto é um template completo de dashboard administrativo construído com
 ### 📊 Componentes
 
 - **Gráficos Diversos**: LineChart, BarChart, AreaChart, PieChart (usando Recharts)
-- **Tabelas Interativas**: Sorting, filtering e busca
+- **Tabelas Interativas**: Sorting, filtering, busca e **paginação**
 - **Sistema de Notificações**: Notificações em tempo real com toast
-- **Gestão de Usuários**: CRUD completo de usuários
+- **Gestão de Usuários**: CRUD completo de usuários com paginação
 - **Tema Dark/Light**: Alternância de tema com Radix UI
 - **Totalmente Responsivo**: Design mobile-first
+- **Audit Logs**: Rastreamento completo de ações dos usuários
+- **Refresh Tokens**: Sistema seguro de renovação de autenticação
 
 ### 🛠️ Stack Tecnológica
 
 #### Backend
 - Node.js + Express
 - TypeScript
-- JWT para autenticação
+- **PostgreSQL + Prisma ORM**
+- JWT + Refresh Tokens para autenticação
 - Joi para validação
+- **Rate Limiting** (express-rate-limit)
+- **Audit Logs** para rastreamento
 - Jest + Supertest para testes
 
 #### Frontend
@@ -37,9 +42,12 @@ Este projeto é um template completo de dashboard administrativo construído com
 
 #### DevOps
 - Docker + Docker Compose
+- **PostgreSQL 16** containerizado
 - Arquitetura de microserviços
-- Health checks
+- Health checks em todos os serviços
+- Migrations automáticas no startup
 - Hot reload em desenvolvimento
+- Volumes persistentes
 
 ## 🚀 Início Rápido
 
@@ -72,6 +80,9 @@ PORT=3001
 NODE_ENV=development
 JWT_SECRET=your-secret-key-change-in-production
 CORS_ORIGIN=http://localhost:3000
+
+# Database
+DATABASE_URL=postgresql://admin:admin123@localhost:5432/admin_dashboard?schema=public
 ```
 
 **Frontend:**
@@ -84,7 +95,19 @@ cp .env.example .env
 NEXT_PUBLIC_API_URL=http://localhost:3001
 ```
 
-#### 3. Instale as dependências
+#### 3. Configure o PostgreSQL
+
+**Opção A: Usando Docker (Recomendado)**
+```bash
+docker run --name admin-dashboard-postgres -e POSTGRES_USER=admin -e POSTGRES_PASSWORD=admin123 -e POSTGRES_DB=admin_dashboard -p 5432:5432 -d postgres:16-alpine
+```
+
+**Opção B: PostgreSQL local**
+- Instale PostgreSQL 16+
+- Crie o banco de dados: `createdb admin_dashboard`
+- Ajuste DATABASE_URL no .env conforme necessário
+
+#### 4. Instale as dependências
 
 **Backend:**
 ```bash
@@ -98,7 +121,22 @@ cd ../frontend
 npm install
 ```
 
-#### 4. Execute os serviços
+#### 5. Configure o banco de dados
+
+```bash
+cd backend
+
+# Gerar Prisma Client
+npm run prisma:generate
+
+# Executar migrations
+npm run prisma:migrate
+
+# Popular banco com dados iniciais
+npm run prisma:seed
+```
+
+#### 6. Execute os serviços
 
 **Backend (Terminal 1):**
 ```bash
@@ -112,11 +150,12 @@ cd frontend
 npm run dev
 ```
 
-#### 5. Acesse a aplicação
+#### 7. Acesse a aplicação
 
 - Frontend: http://localhost:3000
 - Backend API: http://localhost:3001
 - Health Check: http://localhost:3001/health
+- Prisma Studio (opcional): `npm run prisma:studio` - http://localhost:5555
 
 ### Instalação com Docker
 
@@ -242,19 +281,26 @@ npm run test:watch
 ### Autenticação
 
 ```
-POST /api/auth/login
-POST /api/auth/register
+POST /api/auth/login          # Login (retorna accessToken + refreshToken)
+POST /api/auth/register       # Registro de novo usuário
+POST /api/auth/refresh        # Renovar access token usando refresh token
+POST /api/auth/logout         # Logout (invalida refresh token)
+POST /api/auth/logout-all     # Logout de todos os dispositivos (requer auth)
 ```
+
+**Rate Limiting:** Login e Register limitados a 5 tentativas por 15 minutos por IP.
 
 ### Usuários
 
 ```
-GET    /api/users          # Listar usuários (requer autenticação)
-GET    /api/users/:id      # Obter usuário específico
-POST   /api/users          # Criar usuário (requer admin)
-PUT    /api/users/:id      # Atualizar usuário (requer admin)
-DELETE /api/users/:id      # Deletar usuário (requer admin)
+GET    /api/users?page=1&limit=10&search=termo    # Listar usuários com paginação
+GET    /api/users/:id                              # Obter usuário específico
+POST   /api/users                                  # Criar usuário (requer admin)
+PUT    /api/users/:id                              # Atualizar usuário (requer admin)
+DELETE /api/users/:id                              # Deletar usuário (requer admin)
 ```
+
+**Paginação:** Retorna `{ data, total, page, limit, totalPages }`
 
 ### Dashboard
 
@@ -268,6 +314,12 @@ GET /api/dashboard/charts/:type       # Dados dos gráficos (revenue, users, act
 ```
 GET /health                           # Status do servidor
 ```
+
+### Rate Limiting
+
+- **Geral**: 100 requisições por 15 minutos por IP
+- **Autenticação**: 5 tentativas por 15 minutos por IP (login/register)
+- Headers retornados: `RateLimit-Limit`, `RateLimit-Remaining`, `RateLimit-Reset`
 
 ## 🎨 Componentes Reutilizáveis
 
@@ -330,6 +382,7 @@ const { theme, toggleTheme } = useThemeStore();
 | NODE_ENV | Ambiente | development |
 | JWT_SECRET | Chave secreta JWT | - |
 | CORS_ORIGIN | Origem CORS permitida | http://localhost:3000 |
+| DATABASE_URL | URL de conexão PostgreSQL | postgresql://admin:admin123@localhost:5432/admin_dashboard |
 
 #### Frontend (.env)
 
