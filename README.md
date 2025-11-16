@@ -1,1 +1,539 @@
-# admin-dashboard-template
+# Admin Dashboard Template
+
+Template completo para dashboards administrativos com arquitetura de microserviços.
+
+## 📋 Visão Geral
+
+Este projeto é um template completo de dashboard administrativo construído com tecnologias modernas e arquitetura de microserviços. Inclui autenticação, gerenciamento de usuários, visualizações de dados com gráficos, sistema de notificações e tema dark/light.
+
+## ✨ Características
+
+### 📊 Componentes
+
+- **Gráficos Diversos**: LineChart, BarChart, AreaChart, PieChart (usando Recharts)
+- **Tabelas Interativas**: Sorting, filtering, busca e **paginação**
+- **Sistema de Notificações**: Notificações em tempo real com toast
+- **Gestão de Usuários**: CRUD completo de usuários com paginação
+- **Tema Dark/Light**: Alternância de tema com Radix UI
+- **Totalmente Responsivo**: Design mobile-first
+- **Audit Logs**: Rastreamento completo de ações dos usuários
+- **Refresh Tokens**: Sistema seguro de renovação de autenticação
+- **Upload de Arquivos**: Upload de avatars com validação de tipo e tamanho
+- **Email Service**: Envio de emails transacionais (recuperação de senha, boas-vindas)
+- **Recuperação de Senha**: Fluxo completo de reset de senha com tokens seguros
+- **Exports**: Exportação de dados para PDF e Excel (usuários e audit logs)
+
+### 🛠️ Stack Tecnológica
+
+#### Backend
+- Node.js + Express
+- TypeScript
+- **PostgreSQL + Prisma ORM**
+- JWT + Refresh Tokens para autenticação
+- Joi para validação
+- **Rate Limiting** (express-rate-limit)
+- **Audit Logs** para rastreamento
+- **Multer** para upload de arquivos
+- **Nodemailer** para envio de emails
+- **PDFKit** e **ExcelJS** para exports
+- Jest + Supertest para testes
+
+#### Frontend
+- Next.js 14 (App Router)
+- TypeScript
+- Tailwind CSS
+- Recharts para gráficos
+- Radix UI para componentes
+- Zustand para gerenciamento de estado
+- Jest + React Testing Library para testes
+
+#### DevOps
+- Docker + Docker Compose
+- **PostgreSQL 16** containerizado
+- Arquitetura de microserviços
+- Health checks em todos os serviços
+- Migrations automáticas no startup
+- Hot reload em desenvolvimento
+- Volumes persistentes
+
+## 🚀 Início Rápido
+
+### Pré-requisitos
+
+- Node.js 20+
+- Docker e Docker Compose (opcional)
+- npm ou yarn
+
+### Instalação Local
+
+#### 1. Clone o repositório
+
+```bash
+git clone <repository-url>
+cd admin-dashboard-template
+```
+
+#### 2. Configure as variáveis de ambiente
+
+**Backend:**
+```bash
+cd backend
+cp .env.example .env
+```
+
+Edite o arquivo `.env` com suas configurações:
+```env
+PORT=3001
+NODE_ENV=development
+JWT_SECRET=your-secret-key-change-in-production
+CORS_ORIGIN=http://localhost:3000
+
+# Database
+DATABASE_URL=postgresql://admin:admin123@localhost:5432/admin_dashboard?schema=public
+
+# SMTP Configuration (para envio de emails)
+SMTP_HOST=smtp.gmail.com
+SMTP_PORT=587
+SMTP_SECURE=false
+SMTP_USER=your-email@gmail.com
+SMTP_PASS=your-app-password
+EMAIL_FROM_NAME=Admin Dashboard
+
+# Frontend URL (para links em emails)
+FRONTEND_URL=http://localhost:3000
+```
+
+**Frontend:**
+```bash
+cd ../frontend
+cp .env.example .env
+```
+
+```env
+NEXT_PUBLIC_API_URL=http://localhost:3001
+```
+
+#### 3. Configure o PostgreSQL
+
+**Opção A: Usando Docker (Recomendado)**
+```bash
+docker run --name admin-dashboard-postgres -e POSTGRES_USER=admin -e POSTGRES_PASSWORD=admin123 -e POSTGRES_DB=admin_dashboard -p 5432:5432 -d postgres:16-alpine
+```
+
+**Opção B: PostgreSQL local**
+- Instale PostgreSQL 16+
+- Crie o banco de dados: `createdb admin_dashboard`
+- Ajuste DATABASE_URL no .env conforme necessário
+
+#### 4. Instale as dependências
+
+**Backend:**
+```bash
+cd backend
+npm install
+```
+
+**Frontend:**
+```bash
+cd ../frontend
+npm install
+```
+
+#### 5. Configure o banco de dados
+
+```bash
+cd backend
+
+# Gerar Prisma Client
+npm run prisma:generate
+
+# Executar migrations
+npm run prisma:migrate
+
+# Popular banco com dados iniciais
+npm run prisma:seed
+```
+
+#### 6. Execute os serviços
+
+**Backend (Terminal 1):**
+```bash
+cd backend
+npm run dev
+```
+
+**Frontend (Terminal 2):**
+```bash
+cd frontend
+npm run dev
+```
+
+#### 7. Acesse a aplicação
+
+- Frontend: http://localhost:3000
+- Backend API: http://localhost:3001
+- Health Check: http://localhost:3001/health
+- Prisma Studio (opcional): `npm run prisma:studio` - http://localhost:5555
+
+### Instalação com Docker
+
+#### 1. Modo Desenvolvimento
+
+```bash
+docker-compose up
+```
+
+#### 2. Modo Produção
+
+```bash
+docker-compose -f docker-compose.prod.yml up -d
+```
+
+#### 3. Parar os serviços
+
+```bash
+docker-compose down
+```
+
+## 🔐 Autenticação
+
+### Credenciais Padrão
+
+**Administrador:**
+- Email: `admin@example.com`
+- Senha: `admin123`
+
+**Usuário:**
+- Email: `john@example.com`
+- Senha: `user123`
+
+### Fluxo de Autenticação
+
+1. Faça login na página `/login`
+2. O **access token** JWT será armazenado no localStorage (expira em 15 minutos)
+3. O **refresh token** permite renovar o access token (válido por 7 dias)
+4. Todas as requisições subsequentes incluem o access token no header
+5. Quando o access token expira, use o refresh token para obter um novo
+
+### Recuperação de Senha
+
+1. Acesse `/forgot-password` e informe o email
+2. Um email será enviado com link de reset (válido por 1 hora)
+3. Clique no link e defina a nova senha
+4. Todos os refresh tokens serão invalidados por segurança
+
+## 📤 Upload de Arquivos
+
+### Avatar de Usuário
+
+- Acesse as configurações do perfil
+- Faça upload de uma imagem (JPEG, PNG, GIF, WEBP)
+- Tamanho máximo: 5MB
+- A imagem antiga é automaticamente deletada
+
+## 📊 Exports
+
+### Exportar Dados
+
+Usuários administradores podem exportar:
+- **Usuários**: Lista completa em PDF ou Excel
+- **Audit Logs**: Histórico completo de ações em PDF ou Excel
+
+Os exports incluem:
+- PDF: Formatação profissional com headers, paginação e footers
+- Excel: Planilhas com formatação, auto-filtros e cores
+
+## 📁 Estrutura do Projeto
+
+```
+admin-dashboard-template/
+├── backend/                    # Microserviço Backend
+│   ├── src/
+│   │   ├── controllers/       # Controladores da API
+│   │   ├── middleware/        # Middlewares (auth, validation)
+│   │   ├── models/            # Modelos de dados
+│   │   ├── routes/            # Rotas da API
+│   │   ├── services/          # Lógica de negócios
+│   │   ├── types/             # Tipos TypeScript
+│   │   ├── tests/             # Testes
+│   │   └── index.ts           # Entry point
+│   ├── Dockerfile
+│   ├── package.json
+│   └── tsconfig.json
+│
+├── frontend/                   # Microserviço Frontend
+│   ├── src/
+│   │   ├── app/               # Páginas Next.js (App Router)
+│   │   │   ├── dashboard/
+│   │   │   ├── users/
+│   │   │   ├── reports/
+│   │   │   ├── settings/
+│   │   │   └── login/
+│   │   ├── components/        # Componentes React
+│   │   │   ├── charts/        # Componentes de gráficos
+│   │   │   ├── tables/        # Tabelas de dados
+│   │   │   ├── notifications/ # Sistema de notificações
+│   │   │   ├── users/         # Gestão de usuários
+│   │   │   ├── layout/        # Layout components
+│   │   │   └── ui/            # Componentes UI básicos
+│   │   ├── lib/               # Utilitários
+│   │   │   ├── api.ts         # Cliente API
+│   │   │   ├── store.ts       # Zustand stores
+│   │   │   └── utils.ts       # Funções utilitárias
+│   │   ├── styles/            # Estilos globais
+│   │   └── __tests__/         # Testes
+│   ├── Dockerfile
+│   ├── package.json
+│   └── next.config.js
+│
+├── docker-compose.yml          # Docker Compose (desenvolvimento)
+├── docker-compose.prod.yml     # Docker Compose (produção)
+└── README.md
+```
+
+## 🧪 Testes
+
+### Backend
+
+```bash
+cd backend
+
+# Executar todos os testes
+npm test
+
+# Executar com coverage
+npm test -- --coverage
+
+# Watch mode
+npm run test:watch
+```
+
+### Frontend
+
+```bash
+cd frontend
+
+# Executar todos os testes
+npm test
+
+# Executar com coverage
+npm test -- --coverage
+
+# Watch mode
+npm run test:watch
+```
+
+## 📡 API Endpoints
+
+### Autenticação
+
+```
+POST /api/auth/login            # Login (retorna accessToken + refreshToken)
+POST /api/auth/register         # Registro de novo usuário
+POST /api/auth/refresh          # Renovar access token usando refresh token
+POST /api/auth/logout           # Logout (invalida refresh token)
+POST /api/auth/logout-all       # Logout de todos os dispositivos (requer auth)
+POST /api/auth/forgot-password  # Solicitar reset de senha (envia email)
+POST /api/auth/reset-password   # Resetar senha com token
+```
+
+**Rate Limiting:** Login e Register limitados a 5 tentativas por 15 minutos por IP.
+
+### Usuários
+
+```
+GET    /api/users?page=1&limit=10&search=termo    # Listar usuários com paginação
+GET    /api/users/:id                              # Obter usuário específico
+POST   /api/users                                  # Criar usuário (requer admin)
+PUT    /api/users/:id                              # Atualizar usuário (requer admin)
+DELETE /api/users/:id                              # Deletar usuário (requer admin)
+```
+
+**Paginação:** Retorna `{ data, total, page, limit, totalPages }`
+
+### Dashboard
+
+```
+GET /api/dashboard/stats              # Estatísticas do dashboard
+GET /api/dashboard/charts/:type       # Dados dos gráficos (revenue, users, activity)
+```
+
+### Upload
+
+```
+POST   /api/upload/avatar             # Upload de avatar (requer auth, max 5MB)
+DELETE /api/upload/avatar             # Deletar avatar (requer auth)
+```
+
+**Formatos aceitos:** JPEG, JPG, PNG, GIF, WEBP
+**Tamanho máximo:** 5MB
+
+### Exports
+
+```
+GET /api/export/users/pdf             # Exportar usuários para PDF (requer admin)
+GET /api/export/users/excel           # Exportar usuários para Excel (requer admin)
+GET /api/export/audit-logs/pdf        # Exportar audit logs para PDF (requer admin)
+GET /api/export/audit-logs/excel      # Exportar audit logs para Excel (requer admin)
+```
+
+### Health Check
+
+```
+GET /health                           # Status do servidor
+```
+
+### Rate Limiting
+
+- **Geral**: 100 requisições por 15 minutos por IP
+- **Autenticação**: 5 tentativas por 15 minutos por IP (login/register)
+- Headers retornados: `RateLimit-Limit`, `RateLimit-Remaining`, `RateLimit-Reset`
+
+## 🎨 Componentes Reutilizáveis
+
+### Gráficos
+
+```tsx
+import { LineChart, BarChart, AreaChart, PieChart } from '@/components/charts';
+
+<LineChart data={data} dataKey="value" height={300} />
+<BarChart data={data} dataKey="value" color="#3b82f6" />
+<AreaChart data={data} dataKey="value" />
+<PieChart data={data} />
+```
+
+### Tabelas
+
+```tsx
+import { DataTable } from '@/components/tables/DataTable';
+
+const columns = [
+  { key: 'name', header: 'Nome' },
+  { key: 'email', header: 'Email' },
+];
+
+<DataTable data={users} columns={columns} searchable />
+```
+
+### Notificações
+
+```tsx
+import { useNotificationStore } from '@/lib/store';
+
+const { addNotification } = useNotificationStore();
+
+addNotification({
+  title: 'Sucesso',
+  message: 'Operação realizada com sucesso',
+  type: 'success',
+  read: false,
+});
+```
+
+### Tema Dark/Light
+
+```tsx
+import { useThemeStore } from '@/lib/store';
+
+const { theme, toggleTheme } = useThemeStore();
+```
+
+## 🔧 Configuração
+
+### Variáveis de Ambiente
+
+#### Backend (.env)
+
+| Variável | Descrição | Padrão |
+|----------|-----------|--------|
+| PORT | Porta do servidor | 3001 |
+| NODE_ENV | Ambiente | development |
+| JWT_SECRET | Chave secreta JWT | - |
+| CORS_ORIGIN | Origem CORS permitida | http://localhost:3000 |
+| DATABASE_URL | URL de conexão PostgreSQL | postgresql://admin:admin123@localhost:5432/admin_dashboard |
+| SMTP_HOST | Servidor SMTP | smtp.gmail.com |
+| SMTP_PORT | Porta SMTP | 587 |
+| SMTP_SECURE | SSL/TLS | false |
+| SMTP_USER | Usuário SMTP | - |
+| SMTP_PASS | Senha/App Password SMTP | - |
+| EMAIL_FROM_NAME | Nome do remetente | Admin Dashboard |
+| FRONTEND_URL | URL do frontend | http://localhost:3000 |
+
+#### Frontend (.env)
+
+| Variável | Descrição | Padrão |
+|----------|-----------|--------|
+| NEXT_PUBLIC_API_URL | URL da API | http://localhost:3001 |
+
+## 📦 Build para Produção
+
+### Backend
+
+```bash
+cd backend
+npm run build
+npm start
+```
+
+### Frontend
+
+```bash
+cd frontend
+npm run build
+npm start
+```
+
+### Docker Produção
+
+```bash
+docker-compose -f docker-compose.prod.yml up -d
+```
+
+## 🤝 Contribuindo
+
+1. Fork o projeto
+2. Crie uma branch para sua feature (`git checkout -b feature/AmazingFeature`)
+3. Commit suas mudanças (`git commit -m 'Add some AmazingFeature'`)
+4. Push para a branch (`git push origin feature/AmazingFeature`)
+5. Abra um Pull Request
+
+## 📝 Licença
+
+Este projeto está sob a licença MIT. Veja o arquivo LICENSE para mais detalhes.
+
+## 🎯 Roadmap
+
+- [x] Adicionar banco de dados (PostgreSQL + Prisma ORM)
+- [x] Implementar rate limiting
+- [x] Adicionar audit logs
+- [x] Implementar refresh tokens
+- [x] Implementar upload de arquivos (avatars)
+- [x] Implementar exports (PDF, Excel)
+- [x] Sistema de recuperação de senha
+- [x] Email service (transacionais)
+- [ ] Implementar Redis para cache
+- [ ] Adicionar suporte a websockets
+- [ ] Adicionar mais tipos de gráficos
+- [ ] Adicionar autenticação OAuth
+- [ ] Implementar internacionalização (i18n)
+- [ ] Adicionar logs estruturados (Winston/Pino)
+
+## 💡 Recursos Adicionais
+
+- [Next.js Documentation](https://nextjs.org/docs)
+- [Tailwind CSS Documentation](https://tailwindcss.com/docs)
+- [Recharts Documentation](https://recharts.org/)
+- [Radix UI Documentation](https://www.radix-ui.com/)
+- [Express Documentation](https://expressjs.com/)
+
+## 🐛 Problemas Conhecidos
+
+Nenhum problema conhecido no momento. Se encontrar algum bug, por favor abra uma issue.
+
+## 📧 Contato
+
+Para dúvidas ou sugestões, abra uma issue no repositório.
+
+---
+
+⭐ Se este projeto foi útil, considere dar uma estrela!
