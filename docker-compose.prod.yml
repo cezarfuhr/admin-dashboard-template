@@ -1,6 +1,26 @@
 version: '3.8'
 
 services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: admin-dashboard-postgres-prod
+    ports:
+      - "5432:5432"
+    environment:
+      - POSTGRES_USER=${POSTGRES_USER:-admin}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-admin123}
+      - POSTGRES_DB=${POSTGRES_DB:-admin_dashboard}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    restart: always
+    networks:
+      - admin-dashboard-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-admin}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
   backend:
     build:
       context: ./backend
@@ -13,7 +33,11 @@ services:
       - PORT=3001
       - JWT_SECRET=${JWT_SECRET:-your-production-secret-key-change-this}
       - CORS_ORIGIN=${CORS_ORIGIN:-http://localhost:3000}
+      - DATABASE_URL=${DATABASE_URL:-postgresql://admin:admin123@postgres:5432/admin_dashboard?schema=public}
     restart: always
+    depends_on:
+      postgres:
+        condition: service_healthy
     networks:
       - admin-dashboard-network
     healthcheck:
@@ -43,3 +67,6 @@ services:
 networks:
   admin-dashboard-network:
     driver: bridge
+
+volumes:
+  postgres-data:

@@ -1,13 +1,17 @@
 import { Response } from 'express';
 import { UserModel } from '../models/userModel';
+import { AuditLogModel } from '../models/auditLogModel';
 import { AuthRequest } from '../middleware/auth';
-import bcrypt from 'bcryptjs';
 
 export class UserController {
   static async getAllUsers(req: AuthRequest, res: Response) {
     try {
-      const users = await UserModel.findAll();
-      res.json({ success: true, data: users });
+      const page = parseInt(req.query.page as string) || 1;
+      const limit = parseInt(req.query.limit as string) || 10;
+      const search = req.query.search as string;
+
+      const result = await UserModel.findAll({ page, limit, search });
+      res.json({ success: true, ...result });
     } catch (error) {
       res.status(500).json({ success: false, error: 'Failed to fetch users' });
     }
@@ -30,7 +34,7 @@ export class UserController {
 
   static async createUser(req: AuthRequest, res: Response) {
     try {
-      const { password, ...userData } = req.body;
+      const userData = req.body;
 
       // Check if email already exists
       const existingUser = await UserModel.findByEmail(userData.email);
@@ -38,8 +42,18 @@ export class UserController {
         return res.status(400).json({ success: false, error: 'Email already in use' });
       }
 
-      const hashedPassword = await bcrypt.hash(password, 10);
-      const user = await UserModel.create({ ...userData, password: hashedPassword });
+      const user = await UserModel.create(userData);
+
+      // Create audit log
+      await AuditLogModel.create({
+        userId: req.userId,
+        action: 'CREATE',
+        entity: 'USER',
+        entityId: user.id,
+        changes: { name: user.name, email: user.email, role: user.role },
+        ipAddress: req.ip,
+        userAgent: req.headers['user-agent'],
+      });
 
       res.status(201).json({ success: true, data: user });
     } catch (error) {
@@ -52,15 +66,22 @@ export class UserController {
       const { id } = req.params;
       const userData = req.body;
 
-      if (userData.password) {
-        userData.password = await bcrypt.hash(userData.password, 10);
-      }
-
       const user = await UserModel.update(id, userData);
 
       if (!user) {
         return res.status(404).json({ success: false, error: 'User not found' });
       }
+
+      // Create audit log
+      await AuditLogModel.create({
+        userId: req.userId,
+        action: 'UPDATE',
+        entity: 'USER',
+        entityId: id,
+        changes: userData,
+        ipAddress: req.ip,
+        userAgent: req.headers['user-agent'],
+      });
 
       res.json({ success: true, data: user });
     } catch (error) {
@@ -76,6 +97,16 @@ export class UserController {
       if (!success) {
         return res.status(404).json({ success: false, error: 'User not found' });
       }
+
+      // Create audit log
+      await AuditLogModel.create({
+        userId: req.userId,
+        action: 'DELETE',
+        entity: 'USER',
+        entityId: id,
+        ipAddress: req.ip,
+        userAgent: req.headers['user-agent'],
+      });
 
       res.json({ success: true, message: 'User deleted successfully' });
     } catch (error) {

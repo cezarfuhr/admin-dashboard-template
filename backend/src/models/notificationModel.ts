@@ -1,35 +1,98 @@
-import { Notification } from '../types';
-import { v4 as uuidv4 } from 'uuid';
+import { Notification, NotificationType, Prisma } from '@prisma/client';
+import prisma from '../lib/prisma';
 
-// In-memory database
-let notifications: Notification[] = [];
+export interface PaginationParams {
+  page?: number;
+  limit?: number;
+}
+
+export interface PaginatedResponse<T> {
+  data: T[];
+  total: number;
+  page: number;
+  limit: number;
+  totalPages: number;
+}
 
 export class NotificationModel {
-  static async findByUserId(userId: string): Promise<Notification[]> {
-    return notifications.filter(n => n.userId === userId);
+  static async findByUserId(
+    userId: string,
+    params?: PaginationParams
+  ): Promise<PaginatedResponse<Notification>> {
+    const page = params?.page || 1;
+    const limit = params?.limit || 20;
+    const skip = (page - 1) * limit;
+
+    const [notifications, total] = await Promise.all([
+      prisma.notification.findMany({
+        where: { userId },
+        skip,
+        take: limit,
+        orderBy: { createdAt: 'desc' },
+      }),
+      prisma.notification.count({ where: { userId } }),
+    ]);
+
+    return {
+      data: notifications,
+      total,
+      page,
+      limit,
+      totalPages: Math.ceil(total / limit),
+    };
   }
 
-  static async create(notificationData: Omit<Notification, 'id' | 'createdAt'>): Promise<Notification> {
-    const notification: Notification = {
-      ...notificationData,
-      id: uuidv4(),
-      createdAt: new Date(),
-    };
-    notifications.push(notification);
-    return notification;
+  static async create(notificationData: {
+    userId: string;
+    title: string;
+    message: string;
+    type: NotificationType;
+  }): Promise<Notification> {
+    return await prisma.notification.create({
+      data: notificationData,
+    });
   }
 
   static async markAsRead(id: string): Promise<Notification | null> {
-    const notification = notifications.find(n => n.id === id);
-    if (!notification) return null;
-    notification.read = true;
-    return notification;
+    try {
+      return await prisma.notification.update({
+        where: { id },
+        data: { read: true },
+      });
+    } catch (error) {
+      return null;
+    }
+  }
+
+  static async markAllAsRead(userId: string): Promise<number> {
+    const result = await prisma.notification.updateMany({
+      where: { userId, read: false },
+      data: { read: true },
+    });
+    return result.count;
   }
 
   static async delete(id: string): Promise<boolean> {
-    const index = notifications.findIndex(n => n.id === id);
-    if (index === -1) return false;
-    notifications.splice(index, 1);
-    return true;
+    try {
+      await prisma.notification.delete({
+        where: { id },
+      });
+      return true;
+    } catch (error) {
+      return false;
+    }
+  }
+
+  static async deleteAll(userId: string): Promise<number> {
+    const result = await prisma.notification.deleteMany({
+      where: { userId },
+    });
+    return result.count;
+  }
+
+  static async getUnreadCount(userId: string): Promise<number> {
+    return await prisma.notification.count({
+      where: { userId, read: false },
+    });
   }
 }

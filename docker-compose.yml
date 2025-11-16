@@ -1,6 +1,26 @@
 version: '3.8'
 
 services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: admin-dashboard-postgres
+    ports:
+      - "5432:5432"
+    environment:
+      - POSTGRES_USER=admin
+      - POSTGRES_PASSWORD=admin123
+      - POSTGRES_DB=admin_dashboard
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    restart: unless-stopped
+    networks:
+      - admin-dashboard-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U admin"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
   backend:
     build:
       context: ./backend
@@ -9,15 +29,19 @@ services:
     ports:
       - "3001:3001"
     environment:
-      - NODE_ENV=production
+      - NODE_ENV=development
       - PORT=3001
       - JWT_SECRET=your-production-secret-key-change-this
       - CORS_ORIGIN=http://localhost:3000
+      - DATABASE_URL=postgresql://admin:admin123@postgres:5432/admin_dashboard?schema=public
     volumes:
       - ./backend:/app
       - /app/node_modules
-    command: npm run dev
+    command: sh -c "npx prisma migrate deploy && npx prisma db seed && npm run dev"
     restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
     networks:
       - admin-dashboard-network
     healthcheck:
@@ -35,7 +59,7 @@ services:
     ports:
       - "3000:3000"
     environment:
-      - NODE_ENV=production
+      - NODE_ENV=development
       - NEXT_PUBLIC_API_URL=http://localhost:3001
     volumes:
       - ./frontend:/app
@@ -43,7 +67,8 @@ services:
       - /app/.next
     command: npm run dev
     depends_on:
-      - backend
+      backend:
+        condition: service_healthy
     restart: unless-stopped
     networks:
       - admin-dashboard-network
@@ -53,5 +78,6 @@ networks:
     driver: bridge
 
 volumes:
+  postgres-data:
   backend-data:
   frontend-data:

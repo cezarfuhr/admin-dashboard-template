@@ -1,6 +1,14 @@
 import { Request, Response } from 'express';
 import { UserModel } from '../models/userModel';
+import { RefreshTokenModel } from '../models/refreshTokenModel';
+import { AuditLogModel } from '../models/auditLogModel';
+import { AuthRequest } from '../middleware/auth';
 import jwt from 'jsonwebtoken';
+import crypto from 'crypto';
+
+const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key';
+const ACCESS_TOKEN_EXPIRY = '15m'; // Short-lived access token
+const REFRESH_TOKEN_EXPIRY_DAYS = 7; // Refresh token lasts 7 days
 
 export class AuthController {
   static async login(req: Request, res: Response) {
@@ -13,12 +21,28 @@ export class AuthController {
         return res.status(401).json({ success: false, error: 'Invalid credentials' });
       }
 
-      const secret = process.env.JWT_SECRET || 'your-secret-key';
-      const token = jwt.sign(
+      // Generate access token
+      const accessToken = jwt.sign(
         { userId: user.id, role: user.role },
-        secret,
-        { expiresIn: '24h' }
+        JWT_SECRET,
+        { expiresIn: ACCESS_TOKEN_EXPIRY }
       );
+
+      // Generate refresh token
+      const refreshToken = crypto.randomBytes(40).toString('hex');
+      const expiresAt = new Date();
+      expiresAt.setDate(expiresAt.getDate() + REFRESH_TOKEN_EXPIRY_DAYS);
+
+      await RefreshTokenModel.create(user.id, refreshToken, expiresAt);
+
+      // Create audit log
+      await AuditLogModel.create({
+        userId: user.id,
+        action: 'LOGIN',
+        entity: 'AUTH',
+        ipAddress: req.ip,
+        userAgent: req.headers['user-agent'],
+      });
 
       const { password: _, ...userResponse } = user;
 
@@ -26,48 +50,160 @@ export class AuthController {
         success: true,
         data: {
           user: userResponse,
-          token,
+          accessToken,
+          refreshToken,
+          expiresIn: '15m',
         },
       });
     } catch (error) {
+      console.error('Login error:', error);
       res.status(500).json({ success: false, error: 'Login failed' });
     }
   }
 
   static async register(req: Request, res: Response) {
     try {
-      const { password, ...userData } = req.body;
+      const userData = req.body;
 
       const existingUser = await UserModel.findByEmail(userData.email);
       if (existingUser) {
         return res.status(400).json({ success: false, error: 'Email already in use' });
       }
 
-      const bcrypt = require('bcryptjs');
-      const hashedPassword = await bcrypt.hash(password, 10);
-
       const user = await UserModel.create({
         ...userData,
-        password: hashedPassword,
-        role: 'user' // Default role for registration
+        role: 'USER', // Default role for registration
       });
 
-      const secret = process.env.JWT_SECRET || 'your-secret-key';
-      const token = jwt.sign(
+      // Generate access token
+      const accessToken = jwt.sign(
         { userId: user.id, role: user.role },
-        secret,
-        { expiresIn: '24h' }
+        JWT_SECRET,
+        { expiresIn: ACCESS_TOKEN_EXPIRY }
       );
+
+      // Generate refresh token
+      const refreshToken = crypto.randomBytes(40).toString('hex');
+      const expiresAt = new Date();
+      expiresAt.setDate(expiresAt.getDate() + REFRESH_TOKEN_EXPIRY_DAYS);
+
+      await RefreshTokenModel.create(user.id, refreshToken, expiresAt);
+
+      // Create audit log
+      await AuditLogModel.create({
+        userId: user.id,
+        action: 'REGISTER',
+        entity: 'AUTH',
+        changes: { email: user.email, name: user.name },
+        ipAddress: req.ip,
+        userAgent: req.headers['user-agent'],
+      });
 
       res.status(201).json({
         success: true,
         data: {
           user,
-          token,
+          accessToken,
+          refreshToken,
+          expiresIn: '15m',
         },
       });
     } catch (error) {
+      console.error('Registration error:', error);
       res.status(500).json({ success: false, error: 'Registration failed' });
+    }
+  }
+
+  static async refreshToken(req: Request, res: Response) {
+    try {
+      const { refreshToken } = req.body;
+
+      if (!refreshToken) {
+        return res.status(400).json({ success: false, error: 'Refresh token required' });
+      }
+
+      const tokenRecord = await RefreshTokenModel.findByToken(refreshToken);
+
+      if (!tokenRecord) {
+        return res.status(401).json({ success: false, error: 'Invalid refresh token' });
+      }
+
+      if (new Date() > tokenRecord.expiresAt) {
+        await RefreshTokenModel.delete(refreshToken);
+        return res.status(401).json({ success: false, error: 'Refresh token expired' });
+      }
+
+      // Generate new access token
+      const accessToken = jwt.sign(
+        { userId: tokenRecord.userId, role: (tokenRecord.user as any).role },
+        JWT_SECRET,
+        { expiresIn: ACCESS_TOKEN_EXPIRY }
+      );
+
+      res.json({
+        success: true,
+        data: {
+          accessToken,
+          expiresIn: '15m',
+        },
+      });
+    } catch (error) {
+      console.error('Refresh token error:', error);
+      res.status(500).json({ success: false, error: 'Token refresh failed' });
+    }
+  }
+
+  static async logout(req: AuthRequest, res: Response) {
+    try {
+      const { refreshToken } = req.body;
+
+      if (refreshToken) {
+        await RefreshTokenModel.delete(refreshToken);
+      }
+
+      // Create audit log
+      if (req.userId) {
+        await AuditLogModel.create({
+          userId: req.userId,
+          action: 'LOGOUT',
+          entity: 'AUTH',
+          ipAddress: req.ip,
+          userAgent: req.headers['user-agent'],
+        });
+      }
+
+      res.json({ success: true, message: 'Logged out successfully' });
+    } catch (error) {
+      console.error('Logout error:', error);
+      res.status(500).json({ success: false, error: 'Logout failed' });
+    }
+  }
+
+  static async logoutAll(req: AuthRequest, res: Response) {
+    try {
+      if (!req.userId) {
+        return res.status(401).json({ success: false, error: 'Unauthorized' });
+      }
+
+      const count = await RefreshTokenModel.deleteByUserId(req.userId);
+
+      // Create audit log
+      await AuditLogModel.create({
+        userId: req.userId,
+        action: 'LOGOUT_ALL',
+        entity: 'AUTH',
+        changes: { tokensRevoked: count },
+        ipAddress: req.ip,
+        userAgent: req.headers['user-agent'],
+      });
+
+      res.json({
+        success: true,
+        message: `Logged out from ${count} device(s)`,
+      });
+    } catch (error) {
+      console.error('Logout all error:', error);
+      res.status(500).json({ success: false, error: 'Logout all failed' });
     }
   }
 }

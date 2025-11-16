@@ -5,11 +5,14 @@ import { DashboardStats, ChartData } from '../types';
 export class DashboardController {
   static async getStats(req: Request, res: Response) {
     try {
-      const users = await UserModel.findAll();
+      const [totalUsers, activeUsers] = await Promise.all([
+        UserModel.count(),
+        UserModel.getActiveUsers(),
+      ]);
 
       const stats: DashboardStats = {
-        totalUsers: users.length,
-        activeUsers: Math.floor(users.length * 0.7), // 70% active (mock)
+        totalUsers,
+        activeUsers,
         revenue: 45231.89,
         growth: 12.5,
       };
